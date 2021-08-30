@@ -1,0 +1,185 @@
+#+TITLE: シグナルとコールバック
+#+AUTHOR: ned rihine
+#+EMAIL: ned.rihine@gmail.com
+#+LANGUAGE: ja
+
+#+OPTIONS: ^:nil
+
+* シグナルとコールバック
+
+前回は、ウィンドウにウィジェットを配置する方法について説明した。しかし、ウィンドウにウィジェットを配置しただけでは
+アプリケーションとして機能を果たさない。ボタンを押しても自爆しない大型戦艦と一緒だ。どんな巨大な構造物でも、自爆ボタンがついていない構造物はジャンクだ。そうでしょ？
+何にしても、ウィジェットへのアクションに反応する動作が無ければアプリケーションとしては落第点だ。
+例えば、ボタンをクリックした時にどのように動作するかについて記述する必要がある。
+これはシグナルとコールバックによって行う。
+
+シグナルは信号という意味だが、道路の横に立っているアレではなく、とある何かから別の何かに流れる情報のことだ。
+ボタンをクリックすると、ボタンがクリックされたという情報がボタンに伝わる。
+この情報をイベントと呼ぶ GUI ツールキットもあるが、同じものだ。
+さて、「ボタンがクリックされた」という情報がボタンに伝わると、ボタンは次に対応するコールバックを呼び出す。
+コールバックというのは単なる関数のことで、呼ばれて戻るからコールバックだ。
+事前に特定のシグナルに対応するコールバックを登録しておくことで、ユーザが何か操作をした場合、そのコールバックが呼び出されるというわけだ。
+
+** シグナル
+
+GTK+ では、コールバック関数が呼び出される原因となる事象のことをシグナルと呼ぶ。
+GTK+ アプリケーションは常時様々なシグナルを受け取るが、普通はその殆どを無視することになる。
+例えば、ボタンウィジェットを見てみると次のようなシグナルが発生する。
+
+| シグナル | 内容                                 |
+|----------+--------------------------------------|
+| pressed  | ボタンの上でマウスのボタンが押された |
+| released | ボタンの上でマウスのボタンが離された |
+| clicked  | ボタンがクリックされた               |
+| enter    | マウスカーソルがボタンに重なった     |
+| leave    | マウスカーソルがボタンから離れた     |
+
+ところが、実際のアプリケーションにおいてはボタンウィジェットが受け取るべきシグナルは、ほぼマウスクリックに限られる。
+よって、それ以外のシグナルについてはコールバックを書かなくても良い。
+どのシグナルを受け取るかは g_signal_connect 関数を使って設定する。
+
+** コールバック
+
+受信したシグナルに対して適切な処理を行うためには、その処理を行う関数を用意しそれをウィジェットに関連付ける必要がある。
+コールバック関数の登録には g_signal_connect 関数を使用する。
+
+#+BEGIN_SRC c
+#define             g_signal_connect(instance, detailed_signal, c_handler, data)
+#+END_SRC
+
+こんな風に呼ぶ:
+
+#+BEGIN_SRC c
+g_signal_connect( window,
+                  "destroy",
+                  G_CALLBACK(gtk_main_quit),
+                  NULL );
+#+END_SRC
+
+これは、window オブジェクトの "destroy" シグナルに対して、gtk_main_quit 関数を呼び出すという意味だ。
+gtk_main_quit 関数のような GTK+ であらかじめ定義してある関数もあるが、通常は自分で書かなければならない。
+コールバック関数は次のように書く:
+
+#+BEGIN_SRC c
+void widget_on_signal(GtkWidget* widget, gpointer data);
+#+END_SRC
+
+例えば、ボタンをクリックした時に、コンソールにメッセージを出力するためには次のようにする:
+
+#+BEGIN_SRC c
+#include <stdio.h>
+#include <gtk/gtk.h>
+
+
+void button_did_clicked(GtkWidget* widget, gpointer data)
+{
+    printf( "Hello, World!\n" );
+}
+
+
+int main(int argc, char* argv[])
+{
+    GtkWidget* window;
+    GtkWidget* button;
+
+    gtk_init( &argc, &argv );
+
+    window = gtk_window_new( GTK_WINDOW_TOPLEVEL );
+    button = gtk_button_new_with_label( "greeting!" );
+
+    gtk_widget_set_size_request( window, 220, 30 );
+    gtk_container_add( GTK_CONTAINER(window), button );
+
+    g_signal_connect( window,
+                      "destroy",
+                      G_CALLBACK(gtk_main_quit),
+                      NULL );
+
+    g_signal_connect( button,
+                      "clicked",
+                      G_CALLBACK(button_did_clicked),
+                      NULL );
+
+    gtk_widget_show_all( window );
+
+    gtk_main();
+
+    return 0;
+}
+#+END_SRC
+
+
+** コールバック関数にデータを渡す
+
+コールバック関数には、g_signal_connect 関数の第 4 引数を使用してデータを渡すことができる。
+この第 4 引数のデータ型は、上記の button_did_clicked 関数の第 2 引数のデータ型、gpointer である。
+見慣れないデータ型だが、これは void* と同じと考えていい。
+main 関数の int 型変数 n を渡したいなら、次のようにすればいい:
+
+#+BEGIN_SRC c
+#include <stdio.h>
+#include <gtk/gtk.h>
+
+
+void button_did_clicked(GtkWidget* widget, gpointer data)
+{
+    printf( "%d\n", *((int *)data) );
+}
+
+
+int main(int argc, char* argv[])
+{
+    GtkWidget* window;
+    GtkWidget* button;
+    int n = 42;
+
+    gtk_init( &argc, &argv );
+
+    window = gtk_window_new( GTK_WINDOW_TOPLEVEL );
+    button = gtk_button_new_with_label( "AUQLUE" );
+
+    gtk_widget_set_size_request( window, 220, 30 );
+    gtk_container_add( GTK_CONTAINER(window), button );
+
+    g_signal_connect( window,
+                      "destroy",
+                      G_CALLBACK(gtk_main_quit),
+                      NULL );
+
+    g_signal_connect( button,
+                      "clicked",
+                      G_CALLBACK(button_did_clicked),
+                      &n );
+
+    gtk_widget_show_all( window );
+
+    gtk_main();
+
+    return 0;
+}
+#+END_SRC
+
+上記のコードで *((int *)data) という変な記述が出てくるが、これを簡単に説明しておく。
+引数 data は元々 void 型のポインタであるが、上記コードのこのポインタが何を指しているかというと main 関数の int 型変数 n である。
+この場合の data は、実は int 型のポインタなので、int 型のポインタにキャストした後にそれを間接参照しているのだ。
+そうすると、ボタンを押す度に n の値がコンソールに表示される。
+
+** 複数のシグナルの処理
+
+ウィジェットが複数のシグナルに対応するためには、それと同じだけのコールバック関数を必要とする。
+1 つのウィジェットにおけるシグナルに対応したコールバック関数を登録するには単に g_signal_connect 関数を使って順に登録していけばいい。
+また、1 つのシグナルに対して複数のコールバック関数を登録することも可能で、その場合は登録した順番にコールバック関数が呼び出される。
+
+** イベントとシグナル
+
+X Window ライブラリではマウスクリックなどの信号をイベントと呼び、それを処理する関数をイベントハンドラと呼ぶ。
+
+|          | 発生する記号 | 対応する関数             |
+|----------+--------------+--------------------------------|
+| X Window | イベント | イベントハンドラ |
+| GTK+     | シグナル | コールバック(シグナルハンドラ) |
+
+GTK+ ではシグナルに加えて X のイベントも使うことができる。
+
+* 参考文献
++ [[http://www.elf.info.gifu-u.ac.jp/terada/programming/GTK/signal.html][シグナルとコールバック]]
