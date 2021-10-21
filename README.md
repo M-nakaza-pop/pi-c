@@ -1,1 +1,2 @@
 # pi-c
+# Kindle コピペでいけるRaspberryPI 
